@@ -1,0 +1,53 @@
+name: 🌩️ Distributed Relampo Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-nodes:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [1, 2]
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup latest Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          check-latest: true
+
+      - name: Install Relampo CLI
+        run: |
+          curl -fsSL https://dl.relampo.com/install.sh | bash
+
+      - name: Install relampo-worker
+        run: |
+          RELAMPO_VERSION="$(curl -fsSL https://dl.relampo.com/relampo/latest.txt | tr -d '[:space:]')"
+          WORKER_URL="https://dl.relampo.com/relampo/v${RELAMPO_VERSION}/relampo-worker_${RELAMPO_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL "$WORKER_URL" -o /tmp/relampo-worker.tar.gz
+          tar -xzf /tmp/relampo-worker.tar.gz -C /tmp
+          mkdir -p "$HOME/.local/bin"
+          install -m 0755 /tmp/relampo-worker "$HOME/.local/bin/relampo-worker"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run worker node
+        run: |
+          echo "🏁 Starting node ${{ matrix.node }} of 2"
+          SCENARIO_PATH='scenarios/delvis.yaml'
+          VUS_FLAG=""
+          if [ -n "10" ]; then
+            VUS_FLAG="--vus 10"
+          fi
+          relampo-worker --yaml "$SCENARIO_PATH" --node ${{ matrix.node }} --total 2 $VUS_FLAG
+
+      - name: Upload logs/artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulse-results-node-${{ matrix.node }}
+          path: results/
