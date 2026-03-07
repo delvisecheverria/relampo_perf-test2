@@ -48,7 +48,7 @@ jobs:
           set -o pipefail
           (
             cd "$SCENARIO_DIR"
-            RELAMPO_WORKER_LOG_MODE=table relampo-worker --yaml "$SCENARIO_FILE" --node ${{ matrix.node }} --total 2 $VUS_FLAG 2>&1 | awk '/^METHOD[[:space:]]+PATH/ || /^-+/ || /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)[[:space:]]+/ || /^⌬ Duration:/ || /Test finished\./ || /❌/'
+            RELAMPO_WORKER_LOG_MODE=table relampo-worker --yaml "$SCENARIO_FILE" --node ${{ matrix.node }} --total 2 $VUS_FLAG 2>&1 | awk 'BEGIN{esc=sprintf("%c",27)} {line=$0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); if (line ~ /^METHOD[[:space:]]+PATH/ || line ~ /^-+/ || line ~ /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)[[:space:]]+/ || line ~ /Duration:/ || line ~ /Test finished\./ || line ~ /❌/) print line}'
           )
           if [ -d "$SCENARIO_DIR/results" ]; then
             mkdir -p results
