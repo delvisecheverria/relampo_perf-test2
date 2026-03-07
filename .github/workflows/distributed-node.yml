@@ -48,21 +48,25 @@ jobs:
           set -o pipefail
           (
             cd "$SCENARIO_DIR"
+            OUTPUT_FILE="$(mktemp)"
             relampo_progress() {
-              local frames=("" "." ".." "...")
+              local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
               local idx=0
               while true; do
-                printf 'Esto no es magia, relampo solo esta trabajando, pronto te mostrare los resultados%s\n' "${frames[$idx]}"
+                printf '\r\033[38;5;214m%s\033[0m Esto no es magia, relampo solo esta trabajando, pronto te mostrare los resultados.' "${frames[$idx]}"
                 idx=$(( (idx + 1) % ${#frames[@]} ))
-                sleep 4
+                sleep 0.2
               done
             }
             relampo_progress &
             PROGRESS_PID=$!
-            RELAMPO_WORKER_LOG_MODE=table relampo-worker --yaml "$SCENARIO_FILE" --node ${{ matrix.node }} --total 2 $VUS_FLAG 2>&1 | awk 'BEGIN{esc=sprintf("%c",27)} {raw=$0; line=$0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); if (line ~ /^METHOD[[:space:]]+PATH/ || line ~ /^-+/ || line ~ /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)[[:space:]]+/ || line ~ /Duration:/ || line ~ /Test finished\./ || line ~ /❌/) { print raw; fflush(); }}'
+            RELAMPO_WORKER_LOG_MODE=table RELAMPO_WORKER_SNAPSHOT_SECONDS=0 relampo-worker --yaml "$SCENARIO_FILE" --node ${{ matrix.node }} --total 2 $VUS_FLAG 2>&1 | awk 'BEGIN{esc=sprintf("%c",27)} {raw=$0; line=$0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); if (line ~ /^METHOD[[:space:]]+PATH/ || line ~ /^-+/ || line ~ /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)[[:space:]]+/ || line ~ /Duration:/ || line ~ /Test finished\./ || line ~ /❌/) { print raw; fflush(); }}' > "$OUTPUT_FILE"
             WORKER_STATUS=${PIPESTATUS[0]}
             kill "$PROGRESS_PID" 2>/dev/null || true
             wait "$PROGRESS_PID" 2>/dev/null || true
+            printf '\r\033[K'
+            cat "$OUTPUT_FILE"
+            rm -f "$OUTPUT_FILE"
             exit "$WORKER_STATUS"
           )
           if [ -d "$SCENARIO_DIR/results" ]; then
