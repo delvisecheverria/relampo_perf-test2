@@ -50,107 +50,111 @@ jobs:
             cd "$SCENARIO_DIR"
             OUTPUT_FILE="$(mktemp)"
             echo "Esto no es magia, relampo solo esta trabajando, pronto te mostrare los resultados."
-            relampo_jmeter_progress() {
-              local events_file=""
-              local tries=0
-              while [ $tries -lt 100 ]; do
-                events_file="$(ls -1t results/node-*.events.*.jsonl 2>/dev/null | head -n1)"
-                if [ -n "$events_file" ]; then
-                  break
-                fi
-                tries=$((tries + 1))
-                sleep 0.2
-              done
-              if [ -z "$events_file" ]; then
-                return 0
-              fi
-              tail -n0 -F "$events_file" 2>/dev/null | awk '
-                function fmt(sec, h, m, s) {
-                  h = int(sec / 3600)
-                  m = int((sec % 3600) / 60)
-                  s = int(sec % 60)
-                  return sprintf("%02d:%02d:%02d", h, m, s)
-                }
-                function print_summary(prefix, count, elapsed, rate, avg, minv, maxv, errs, errpct) {
-                  if (count <= 0) return
-                  if (elapsed <= 0) elapsed = 1
-                  rate = count / elapsed
-                  avg = (count > 0 ? sumv / count : 0)
-                  minv = (minv_local < 0 ? 0 : minv_local)
-                  maxv = maxv_local
-                  errpct = (count > 0 ? (errs * 100.0) / count : 0)
-                  printf("summary %s %7d in %s = %6.1f/s Avg: %7.1f Min: %7.1f Max: %7.1f Err: %5d (%6.2f%%)\n", prefix, count, fmt(elapsed), rate, avg, minv, maxv, errs, errpct)
-                  fflush()
-                }
+            relampo_extract_stats() {
+              local file="$1"
+              local start_line="$2"
+              awk -v from="$start_line" '
                 BEGIN {
-                  start = systime()
-                  last_flush = start
-                  total = 0
-                  total_err = 0
-                  total_sum = 0
-                  total_min = -1
-                  total_max = 0
-                  win_count = 0
-                  win_err = 0
-                  win_sum = 0
-                  win_min = -1
-                  win_max = 0
+                  count = 0
+                  errs = 0
+                  sum = 0
+                  minv = -1
+                  maxv = 0
                 }
+                NR < from { next }
                 {
                   if ($0 !~ /"method":"[A-Z]+"/) next
                   if ($0 ~ /"method":"INFO"/ || $0 ~ /"method":"SYSTEM"/) next
+                  lat = 0
+                  st = 0
                   if (match($0, /"latency_ms":[0-9.]+/)) {
                     lat_s = substr($0, RSTART + 13, RLENGTH - 13)
                     lat = lat_s + 0
-                  } else {
-                    lat = 0
                   }
                   if (match($0, /"status":[0-9]+/)) {
                     st_s = substr($0, RSTART + 9, RLENGTH - 9)
                     st = st_s + 0
-                  } else {
-                    st = 0
                   }
-                  total++
-                  total_sum += lat
-                  if (total_min < 0 || lat < total_min) total_min = lat
-                  if (lat > total_max) total_max = lat
-                  if (st >= 400) total_err++
-
-                  win_count++
-                  win_sum += lat
-                  if (win_min < 0 || lat < win_min) win_min = lat
-                  if (lat > win_max) win_max = lat
-                  if (st >= 400) win_err++
-
-                  now = systime()
-                  if (now - last_flush >= 5) {
-                    sumv = win_sum
-                    minv_local = win_min
-                    maxv_local = win_max
-                    print_summary("+", win_count, now - last_flush, 0, 0, 0, 0, win_err, 0)
-
-                    sumv = total_sum
-                    minv_local = total_min
-                    maxv_local = total_max
-                    print_summary("=", total, now - start, 0, 0, 0, 0, total_err, 0)
-
-                    win_count = 0
-                    win_err = 0
-                    win_sum = 0
-                    win_min = -1
-                    win_max = 0
-                    last_flush = now
-                  }
+                  count++
+                  sum += lat
+                  if (minv < 0 || lat < minv) minv = lat
+                  if (lat > maxv) maxv = lat
+                  if (st >= 400) errs++
                 }
-              '
+                END {
+                  if (minv < 0) minv = 0
+                  printf("%d|%.3f|%.3f|%.3f|%d\n", count, sum, minv, maxv, errs)
+                }
+              ' "$file"
             }
-            relampo_jmeter_progress &
-            PROGRESS_PID=$!
-            RELAMPO_WORKER_LOG_MODE=table RELAMPO_WORKER_SNAPSHOT_SECONDS=0 relampo-worker --yaml "$SCENARIO_FILE" --node ${{ matrix.node }} --total 2 $VUS_FLAG 2>&1 | awk 'BEGIN{esc=sprintf("%c",27)} {raw=$0; line=$0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); if (line ~ /^METHOD[[:space:]]+PATH/ || line ~ /^-+/ || line ~ /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)[[:space:]]+/ || line ~ /Duration:/ || line ~ /Test finished\./ || line ~ /❌/) { print raw; fflush(); }}' > "$OUTPUT_FILE"
-            WORKER_STATUS=${PIPESTATUS[0]}
-            kill "$PROGRESS_PID" 2>/dev/null || true
-            wait "$PROGRESS_PID" 2>/dev/null || true
+            relampo_fmt_hms() {
+              local s="$1"
+              if [ "$s" -lt 0 ]; then
+                s=0
+              fi
+              printf '%02d:%02d:%02d' $((s / 3600)) $(((s % 3600) / 60)) $((s % 60))
+            }
+            relampo_print_summary() {
+              local prefix="$1"
+              local count="$2"
+              local elapsed="$3"
+              local sum="$4"
+              local minv="$5"
+              local maxv="$6"
+              local errs="$7"
+              if [ "$count" -le 0 ]; then
+                return
+              fi
+              if [ "$elapsed" -le 0 ]; then
+                elapsed=1
+              fi
+              local rate avg errpct
+              rate="$(awk -v c="$count" -v e="$elapsed" 'BEGIN { printf "%.1f", (e > 0 ? c / e : 0) }')"
+              avg="$(awk -v s="$sum" -v c="$count" 'BEGIN { printf "%.1f", (c > 0 ? s / c : 0) }')"
+              errpct="$(awk -v e="$errs" -v c="$count" 'BEGIN { printf "%.2f", (c > 0 ? (e * 100.0) / c : 0) }')"
+              printf 'summary %s %7d in %s = %6s/s Avg: %7s Min: %7.1f Max: %7.1f Err: %5d (%6s%%)\n' \
+                "$prefix" "$count" "$(relampo_fmt_hms "$elapsed")" "$rate" "$avg" "$minv" "$maxv" "$errs" "$errpct"
+            }
+            relampo_jmeter_progress() {
+              local worker_pid="$1"
+              local start_epoch
+              local now
+              local total_elapsed
+              local events_file=""
+              local prev_lines=1
+              while kill -0 "$worker_pid" 2>/dev/null; do
+                sleep 5
+                if [ -z "$events_file" ] || [ ! -f "$events_file" ]; then
+                  events_file="$(ls -1t results/node-*.events.*.jsonl 2>/dev/null | head -n1)"
+                  if [ -z "$events_file" ] || [ ! -f "$events_file" ]; then
+                    continue
+                  fi
+                  prev_lines=1
+                fi
+                start_epoch="${start_epoch:-$(date +%s)}"
+                now="$(date +%s)"
+                total_elapsed=$((now - start_epoch))
+
+                local total_stats win_stats
+                local total_count total_sum total_min total_max total_err
+                local win_count win_sum win_min win_max win_err
+
+                total_stats="$(relampo_extract_stats "$events_file" 1)"
+                win_stats="$(relampo_extract_stats "$events_file" "$prev_lines")"
+                IFS='|' read -r total_count total_sum total_min total_max total_err <<< "$total_stats"
+                IFS='|' read -r win_count win_sum win_min win_max win_err <<< "$win_stats"
+
+                relampo_print_summary "+" "$win_count" 5 "$win_sum" "$win_min" "$win_max" "$win_err"
+                relampo_print_summary "=" "$total_count" "$total_elapsed" "$total_sum" "$total_min" "$total_max" "$total_err"
+
+                prev_lines=$(( $(wc -l < "$events_file") + 1 ))
+              done
+            }
+            RELAMPO_WORKER_LOG_MODE=table RELAMPO_WORKER_SNAPSHOT_SECONDS=0 relampo-worker --yaml "$SCENARIO_FILE" --node ${{ matrix.node }} --total 2 $VUS_FLAG 2>&1 | awk 'BEGIN{esc=sprintf("%c",27)} {raw=$0; line=$0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); if (line ~ /^METHOD[[:space:]]+PATH/ || line ~ /^-+/ || line ~ /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)[[:space:]]+/ || line ~ /Duration:/ || line ~ /Test finished\./ || line ~ /❌/) { print raw; fflush(); }}' > "$OUTPUT_FILE" &
+            WORKER_PID=$!
+            relampo_jmeter_progress "$WORKER_PID"
+            wait "$WORKER_PID"
+            WORKER_STATUS=$?
             cat "$OUTPUT_FILE"
             rm -f "$OUTPUT_FILE"
             exit "$WORKER_STATUS"
