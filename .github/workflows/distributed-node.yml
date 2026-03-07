@@ -45,9 +45,10 @@ jobs:
           if [ -n "10" ]; then
             VUS_FLAG="--vus 10"
           fi
+          set -o pipefail
           (
             cd "$SCENARIO_DIR"
-            relampo-worker --yaml "$SCENARIO_FILE" --node ${{ matrix.node }} --total 2 $VUS_FLAG
+            RELAMPO_WORKER_LOG_MODE=table relampo-worker --yaml "$SCENARIO_FILE" --node ${{ matrix.node }} --total 2 $VUS_FLAG 2>&1 | awk '/^METHOD[[:space:]]+PATH/ || /^-+/ || /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)[[:space:]]+/ || /^⌬ Duration:/ || /Test finished\./ || /❌/'
           )
           if [ -d "$SCENARIO_DIR/results" ]; then
             mkdir -p results
