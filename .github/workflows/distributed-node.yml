@@ -183,6 +183,17 @@ jobs:
             relampo_jmeter_progress "$WORKER_PID"
             wait "$WORKER_PID"
             WORKER_STATUS=$?
+            CLEAN_OUTPUT_FILE="$(mktemp)"
+            awk 'BEGIN{esc=sprintf("%c",27)} {line=$0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); print line}' "$OUTPUT_FILE" > "$CLEAN_OUTPUT_FILE"
+            MEM_PEAK="$(grep -Eo 'MEM Peak:[[:space:]]*[0-9]+' "$CLEAN_OUTPUT_FILE" | tail -n1 | grep -Eo '[0-9]+' || true)"
+            CPU_PEAK="$(grep -Eo 'CPU Peak:[[:space:]]*[0-9]+([.][0-9]+)?' "$CLEAN_OUTPUT_FILE" | tail -n1 | grep -Eo '[0-9]+([.][0-9]+)?' || true)"
+            GO_PEAK="$(grep -Eo 'Go:[[:space:]]*[0-9]+' "$CLEAN_OUTPUT_FILE" | tail -n1 | grep -Eo '[0-9]+' || true)"
+            [ -z "$MEM_PEAK" ] && MEM_PEAK=0
+            [ -z "$CPU_PEAK" ] && CPU_PEAK=0
+            [ -z "$GO_PEAK" ] && GO_PEAK=0
+            mkdir -p results
+            printf '{"mem_peak_mb":%s,"cpu_peak":%s,"go_peak":%s}\n' "$MEM_PEAK" "$CPU_PEAK" "$GO_PEAK" > "results/node-${{ matrix.node }}.peaks.json"
+            rm -f "$CLEAN_OUTPUT_FILE"
             cat "$OUTPUT_FILE"
             rm -f "$OUTPUT_FILE"
             exit "$WORKER_STATUS"
