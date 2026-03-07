@@ -49,22 +49,108 @@ jobs:
           (
             cd "$SCENARIO_DIR"
             OUTPUT_FILE="$(mktemp)"
-            relampo_progress() {
-              local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
-              local idx=0
-              while true; do
-                printf '\r\033[38;5;214m%s\033[0m Esto no es magia, relampo solo esta trabajando, pronto te mostrare los resultados.' "${frames[$idx]}"
-                idx=$(( (idx + 1) % ${#frames[@]} ))
+            echo "Esto no es magia, relampo solo esta trabajando, pronto te mostrare los resultados."
+            relampo_jmeter_progress() {
+              local events_file=""
+              local tries=0
+              while [ $tries -lt 100 ]; do
+                events_file="$(ls -1t results/node-*.events.*.jsonl 2>/dev/null | head -n1)"
+                if [ -n "$events_file" ]; then
+                  break
+                fi
+                tries=$((tries + 1))
                 sleep 0.2
               done
+              if [ -z "$events_file" ]; then
+                return 0
+              fi
+              tail -n0 -F "$events_file" 2>/dev/null | awk '
+                function fmt(sec, h, m, s) {
+                  h = int(sec / 3600)
+                  m = int((sec % 3600) / 60)
+                  s = int(sec % 60)
+                  return sprintf("%02d:%02d:%02d", h, m, s)
+                }
+                function print_summary(prefix, count, elapsed, rate, avg, minv, maxv, errs, errpct) {
+                  if (count <= 0) return
+                  if (elapsed <= 0) elapsed = 1
+                  rate = count / elapsed
+                  avg = (count > 0 ? sumv / count : 0)
+                  minv = (minv_local < 0 ? 0 : minv_local)
+                  maxv = maxv_local
+                  errpct = (count > 0 ? (errs * 100.0) / count : 0)
+                  printf("summary %s %7d in %s = %6.1f/s Avg: %7.1f Min: %7.1f Max: %7.1f Err: %5d (%6.2f%%)\n", prefix, count, fmt(elapsed), rate, avg, minv, maxv, errs, errpct)
+                  fflush()
+                }
+                BEGIN {
+                  start = systime()
+                  last_flush = start
+                  total = 0
+                  total_err = 0
+                  total_sum = 0
+                  total_min = -1
+                  total_max = 0
+                  win_count = 0
+                  win_err = 0
+                  win_sum = 0
+                  win_min = -1
+                  win_max = 0
+                }
+                {
+                  if ($0 !~ /"method":"[A-Z]+"/) next
+                  if ($0 ~ /"method":"INFO"/ || $0 ~ /"method":"SYSTEM"/) next
+                  if (match($0, /"latency_ms":[0-9.]+/)) {
+                    lat_s = substr($0, RSTART + 13, RLENGTH - 13)
+                    lat = lat_s + 0
+                  } else {
+                    lat = 0
+                  }
+                  if (match($0, /"status":[0-9]+/)) {
+                    st_s = substr($0, RSTART + 9, RLENGTH - 9)
+                    st = st_s + 0
+                  } else {
+                    st = 0
+                  }
+                  total++
+                  total_sum += lat
+                  if (total_min < 0 || lat < total_min) total_min = lat
+                  if (lat > total_max) total_max = lat
+                  if (st >= 400) total_err++
+
+                  win_count++
+                  win_sum += lat
+                  if (win_min < 0 || lat < win_min) win_min = lat
+                  if (lat > win_max) win_max = lat
+                  if (st >= 400) win_err++
+
+                  now = systime()
+                  if (now - last_flush >= 5) {
+                    sumv = win_sum
+                    minv_local = win_min
+                    maxv_local = win_max
+                    print_summary("+", win_count, now - last_flush, 0, 0, 0, 0, win_err, 0)
+
+                    sumv = total_sum
+                    minv_local = total_min
+                    maxv_local = total_max
+                    print_summary("=", total, now - start, 0, 0, 0, 0, total_err, 0)
+
+                    win_count = 0
+                    win_err = 0
+                    win_sum = 0
+                    win_min = -1
+                    win_max = 0
+                    last_flush = now
+                  }
+                }
+              '
             }
-            relampo_progress &
+            relampo_jmeter_progress &
             PROGRESS_PID=$!
             RELAMPO_WORKER_LOG_MODE=table RELAMPO_WORKER_SNAPSHOT_SECONDS=0 relampo-worker --yaml "$SCENARIO_FILE" --node ${{ matrix.node }} --total 2 $VUS_FLAG 2>&1 | awk 'BEGIN{esc=sprintf("%c",27)} {raw=$0; line=$0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); if (line ~ /^METHOD[[:space:]]+PATH/ || line ~ /^-+/ || line ~ /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)[[:space:]]+/ || line ~ /Duration:/ || line ~ /Test finished\./ || line ~ /❌/) { print raw; fflush(); }}' > "$OUTPUT_FILE"
             WORKER_STATUS=${PIPESTATUS[0]}
             kill "$PROGRESS_PID" 2>/dev/null || true
             wait "$PROGRESS_PID" 2>/dev/null || true
-            printf '\r\033[K'
             cat "$OUTPUT_FILE"
             rm -f "$OUTPUT_FILE"
             exit "$WORKER_STATUS"
