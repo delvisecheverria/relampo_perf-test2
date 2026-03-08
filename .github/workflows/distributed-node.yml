@@ -150,6 +150,66 @@ jobs:
               printf 'summary %s %7d in %s = %6s/s Avg: %7s Min: %7.1f Max: %7.1f P95: %7.1f%s Active: %3d/%-3d Err: %5d (%6s%%)\n' \
                 "$prefix" "$count" "$(relampo_fmt_hms "$elapsed")" "$rate" "$avg" "$minv" "$maxv" "$p95" "$p95_alarm" "$active_last" "$active_max" "$errs" "$errpct"
             }
+            relampo_print_github_diagnosis() {
+              local total_count="$1"
+              local total_err="$2"
+              local total_p95="$3"
+              local mem_peak_mb="$4"
+              local mem_peak_pct="$5"
+              local cpu_peak="$6"
+              local go_delta="$7"
+              local iowait_peak="$8"
+              local iowait_samples="$9"
+              if [ "$total_count" -le 0 ]; then
+                return
+              fi
+              local errpct iowait_pct
+              errpct="$(awk -v e="$total_err" -v c="$total_count" 'BEGIN { printf "%.2f", (c > 0 ? (e * 100.0) / c : 0) }')"
+              iowait_pct="$(awk -v io="$iowait_peak" -v go="$RELAMPO_GO_SAMPLE_PEAK" 'BEGIN { if (go > 0) printf "%.1f", (io * 100.0) / go; else printf "0.0" }')"
+
+              echo ""
+              echo "Análisis automático de saturación"
+              echo "Señales: ERR ${errpct}% | P95 ${total_p95} ms | MEM pico ${mem_peak_mb} MB (${mem_peak_pct}%) | CPU pico ${cpu_peak}% | Go Δ ${go_delta} | IO wait pico ${iowait_peak} | IO wait ${iowait_pct}% | muestras ${iowait_samples}"
+
+              if awk -v e="$errpct" -v p="$total_p95" 'BEGIN { exit !(e >= 20.0 && p >= 8000.0) }'; then
+                echo "Nivel: CRÍTICO"
+                if [ "$iowait_samples" -eq 0 ]; then
+                  echo "Lectura: degradación severa, pero IO wait quedó inconcluso (sin muestras válidas de pprof)."
+                  echo "Acción: repetir la prueba y revisar 5xx, timeouts y colas del sistema objetivo."
+                elif awk -v pct="$iowait_pct" 'BEGIN { exit !(pct >= 20.0) }'; then
+                  echo "Lectura: probable cuello de botella externo (red/DB/servicio dependiente), con goroutines en espera de I/O."
+                  echo "Acción: revisar latencia de dependencias, pool de conexiones y timeouts aguas abajo."
+                elif awk -v mem="$mem_peak_pct" 'BEGIN { exit !(mem >= 85.0) }'; then
+                  echo "Lectura: posible saturación de memoria del nodo generador."
+                  echo "Acción: bajar VUs por nodo o distribuir en más nodos."
+                elif awk -v cpu="$cpu_peak" 'BEGIN { exit !(cpu >= 85.0) }'; then
+                  echo "Lectura: posible saturación del nodo generador (CPU alta)."
+                  echo "Acción: bajar VUs por nodo o distribuir en más nodos."
+                elif [ "$go_delta" -ge 1000 ]; then
+                  echo "Lectura: acumulación alta de goroutines; patrón compatible con backpressure."
+                  echo "Acción: reducir rampa inicial y validar capacidad real del backend antes de subir carga."
+                else
+                  echo "Lectura: hay degradación fuerte sin firma única de CPU/I/O."
+                  echo "Acción: priorizar endpoints con más errores y correlacionar con logs del servidor."
+                fi
+              elif awk -v e="$errpct" 'BEGIN { exit !(e > 0.0) }'; then
+                echo "Nivel: ALERTA"
+                echo "Lectura: hay errores no esperados bajo carga."
+                echo "Acción: revisar fallos por endpoint y repetir con la misma carga para confirmar patrón."
+              elif awk -v p="$total_p95" 'BEGIN { exit !(p >= 8000.0) }'; then
+                echo "Nivel: ALERTA"
+                echo "Lectura: latencia P95 en zona de percepción negativa para usuarios."
+                echo "Acción: optimizar endpoints más lentos o reducir concurrencia."
+              elif awk -v mem="$mem_peak_pct" 'BEGIN { exit !(mem >= 85.0) }'; then
+                echo "Nivel: ALERTA"
+                echo "Lectura: memoria del nodo generador en zona alta."
+                echo "Acción: reducir carga por nodo o ampliar distribución."
+              else
+                echo "Nivel: ESTABLE"
+                echo "Lectura: sin señales críticas de saturación en esta corrida."
+              fi
+              echo ""
+            }
             RELAMPO_GO_START=""
             RELAMPO_GO_END=""
             RELAMPO_GO_SAMPLE_PEAK=0
@@ -158,6 +218,8 @@ jobs:
             RELAMPO_GO_IOWAIT_SAMPLE_PEAK=0
             RELAMPO_GO_IOWAIT_SAMPLES=0
             RELAMPO_MEM_PS_PEAK=0
+            RELAMPO_MEM_TOTAL_MB="$(awk '/MemTotal:/ { print int($2/1024) }' /proc/meminfo 2>/dev/null | head -n1)"
+            [ -z "$RELAMPO_MEM_TOTAL_MB" ] && RELAMPO_MEM_TOTAL_MB=0
             RELAMPO_CPU_PS_PEAK=0
             relampo_capture_go_sample() {
               local go_dump go_count go_iowait
@@ -269,6 +331,8 @@ jobs:
             EXIST_GO_IOWAIT_END="$(grep -Eo '"go_iowait_end"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
             EXIST_GO_IOWAIT_DELTA="$(grep -Eo '"go_iowait_delta"[[:space:]]*:[[:space:]]*-?[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo -- '-?[0-9]+' || true)"
             EXIST_GO_IOWAIT_SAMPLES="$(grep -Eo '"go_iowait_samples"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
+            EXIST_MEM_TOTAL="$(grep -Eo '"mem_total_mb"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
+            EXIST_MEM_PCT="$(grep -Eo '"mem_peak_pct"[[:space:]]*:[[:space:]]*[0-9]+([.][0-9]+)?' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+([.][0-9]+)?' || true)"
             [ -z "$EXIST_MEM" ] && EXIST_MEM=0
             [ -z "$EXIST_CPU" ] && EXIST_CPU=0
             [ -z "$EXIST_GO" ] && EXIST_GO=0
@@ -278,6 +342,8 @@ jobs:
             [ -z "$EXIST_GO_IOWAIT_PEAK" ] && EXIST_GO_IOWAIT_PEAK=0
             [ -z "$EXIST_GO_IOWAIT_END" ] && EXIST_GO_IOWAIT_END=0
             [ -z "$EXIST_GO_IOWAIT_SAMPLES" ] && EXIST_GO_IOWAIT_SAMPLES=0
+            [ -z "$EXIST_MEM_TOTAL" ] && EXIST_MEM_TOTAL=0
+            [ -z "$EXIST_MEM_PCT" ] && EXIST_MEM_PCT=0
             if [ "$EXIST_GO_START" -eq 0 ] && [ -n "$RELAMPO_GO_START" ]; then
               EXIST_GO_START="$RELAMPO_GO_START"
             fi
@@ -314,6 +380,15 @@ jobs:
             if [ "$RELAMPO_MEM_PS_PEAK" -gt "$FINAL_MEM" ]; then
               FINAL_MEM="$RELAMPO_MEM_PS_PEAK"
             fi
+            FINAL_MEM_TOTAL="$EXIST_MEM_TOTAL"
+            if [ "$RELAMPO_MEM_TOTAL_MB" -gt "$FINAL_MEM_TOTAL" ]; then
+              FINAL_MEM_TOTAL="$RELAMPO_MEM_TOTAL_MB"
+            fi
+            FINAL_MEM_PCT="$EXIST_MEM_PCT"
+            if [ "$FINAL_MEM_TOTAL" -gt 0 ]; then
+              CALC_MEM_PCT="$(awk -v used="$FINAL_MEM" -v total="$FINAL_MEM_TOTAL" 'BEGIN { if (total > 0) printf "%.2f", (used * 100.0) / total; else printf "0.00" }')"
+              FINAL_MEM_PCT="$(awk -v a="$FINAL_MEM_PCT" -v b="$CALC_MEM_PCT" 'BEGIN { if (b > a) printf "%.2f", b; else printf "%.2f", a }')"
+            fi
             FINAL_CPU="$(awk -v a="$EXIST_CPU" -v b="$OUT_CPU" -v c="$RELAMPO_CPU_PS_PEAK" 'BEGIN { m=a; if (b > m) m=b; if (c > m) m=c; printf "%.2f", m }')"
             FINAL_GO="$EXIST_GO"
             if [ "$OUT_GO" -gt "$FINAL_GO" ]; then
@@ -330,7 +405,7 @@ jobs:
             if [ "$RELAMPO_GO_IOWAIT_SAMPLES" -gt "$FINAL_GO_IOWAIT_SAMPLES" ]; then
               FINAL_GO_IOWAIT_SAMPLES="$RELAMPO_GO_IOWAIT_SAMPLES"
             fi
-            printf '{"mem_peak_mb":%s,"cpu_peak":%s,"go_peak":%s,"go_start":%s,"go_end":%s,"go_delta":%s,"go_iowait_peak":%s,"go_iowait_start":%s,"go_iowait_end":%s,"go_iowait_delta":%s,"go_iowait_samples":%s}\n' "$FINAL_MEM" "$FINAL_CPU" "$FINAL_GO" "$EXIST_GO_START" "$EXIST_GO_END" "$EXIST_GO_DELTA" "$FINAL_GO_IOWAIT" "$EXIST_GO_IOWAIT_START" "$EXIST_GO_IOWAIT_END" "$EXIST_GO_IOWAIT_DELTA" "$FINAL_GO_IOWAIT_SAMPLES" > "$PEAKS_FILE"
+            printf '{"mem_peak_mb":%s,"mem_total_mb":%s,"mem_peak_pct":%s,"cpu_peak":%s,"go_peak":%s,"go_start":%s,"go_end":%s,"go_delta":%s,"go_iowait_peak":%s,"go_iowait_start":%s,"go_iowait_end":%s,"go_iowait_delta":%s,"go_iowait_samples":%s}\n' "$FINAL_MEM" "$FINAL_MEM_TOTAL" "$FINAL_MEM_PCT" "$FINAL_CPU" "$FINAL_GO" "$EXIST_GO_START" "$EXIST_GO_END" "$EXIST_GO_DELTA" "$FINAL_GO_IOWAIT" "$EXIST_GO_IOWAIT_START" "$EXIST_GO_IOWAIT_END" "$EXIST_GO_IOWAIT_DELTA" "$FINAL_GO_IOWAIT_SAMPLES" > "$PEAKS_FILE"
             if [ "$RELAMPO_P95_ALERT" -eq 1 ]; then
               echo "ⅰ P90 response-time reference"
               echo "   ⚠ P90 > 8s: alert zone. User attention is at risk, and the experience may feel frustrating."
@@ -342,6 +417,18 @@ jobs:
               echo "   Based on classic user response-time guidance (Jakob Nielsen: attention degrades around 10s)"
               echo "   and practical performance engineering ranges commonly associated with Scott Barber."
             fi
+            FINAL_TOTAL_COUNT=0
+            FINAL_TOTAL_ERR=0
+            FINAL_TOTAL_P95=0
+            FINAL_EVENTS_FILE="$(ls -1t results/node-*.events.*.jsonl 2>/dev/null | head -n1)"
+            if [ -n "$FINAL_EVENTS_FILE" ] && [ -f "$FINAL_EVENTS_FILE" ]; then
+              FINAL_TOTAL_STATS="$(relampo_extract_stats "$FINAL_EVENTS_FILE" 1)"
+              IFS='|' read -r FINAL_TOTAL_COUNT _ _ _ FINAL_TOTAL_ERR FINAL_TOTAL_P95 _ _ <<< "$FINAL_TOTAL_STATS"
+            fi
+            [ -z "$FINAL_TOTAL_COUNT" ] && FINAL_TOTAL_COUNT=0
+            [ -z "$FINAL_TOTAL_ERR" ] && FINAL_TOTAL_ERR=0
+            [ -z "$FINAL_TOTAL_P95" ] && FINAL_TOTAL_P95=0
+            relampo_print_github_diagnosis "$FINAL_TOTAL_COUNT" "$FINAL_TOTAL_ERR" "$FINAL_TOTAL_P95" "$FINAL_MEM" "$FINAL_MEM_PCT" "$FINAL_CPU" "$EXIST_GO_DELTA" "$FINAL_GO_IOWAIT" "$FINAL_GO_IOWAIT_SAMPLES"
             cat "$OUTPUT_FILE"
             rm -f "$OUTPUT_FILE"
             exit "$WORKER_STATUS"
