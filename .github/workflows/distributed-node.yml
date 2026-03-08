@@ -153,6 +153,8 @@ jobs:
             RELAMPO_GO_START=""
             RELAMPO_GO_END=""
             RELAMPO_GO_SAMPLE_PEAK=0
+            RELAMPO_MEM_PS_PEAK=0
+            RELAMPO_CPU_PS_PEAK=0
             relampo_capture_go_sample() {
               local go_count
               go_count="$(curl -fsS --max-time 1 "http://127.0.0.1:6060/debug/pprof/goroutine?debug=1" 2>/dev/null | awk 'NR==1 { for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+$/) { print $i; break } }' || true)"
@@ -167,6 +169,21 @@ jobs:
                 RELAMPO_GO_SAMPLE_PEAK="$go_count"
               fi
             }
+            relampo_capture_process_sample() {
+              local worker_pid="$1"
+              local rss_kb cpu_pct rss_mb
+              rss_kb="$(ps -p "$worker_pid" -o rss= 2>/dev/null | awk 'NR==1 { print int($1+0) }' || true)"
+              cpu_pct="$(ps -p "$worker_pid" -o %cpu= 2>/dev/null | awk 'NR==1 { print $1+0 }' || true)"
+              if [ -n "$rss_kb" ] && [ "$rss_kb" -gt 0 ]; then
+                rss_mb=$(( (rss_kb + 1023) / 1024 ))
+                if [ "$rss_mb" -gt "$RELAMPO_MEM_PS_PEAK" ]; then
+                  RELAMPO_MEM_PS_PEAK="$rss_mb"
+                fi
+              fi
+              if [ -n "$cpu_pct" ]; then
+                RELAMPO_CPU_PS_PEAK="$(awk -v a="$RELAMPO_CPU_PS_PEAK" -v b="$cpu_pct" 'BEGIN { if (b > a) printf "%.2f", b; else printf "%.2f", a }')"
+              fi
+            }
             relampo_jmeter_progress() {
               local worker_pid="$1"
               local start_epoch
@@ -176,6 +193,7 @@ jobs:
               local prev_lines=1
               while kill -0 "$worker_pid" 2>/dev/null; do
                 relampo_capture_go_sample
+                relampo_capture_process_sample "$worker_pid"
                 sleep 5
                 if [ -z "$events_file" ] || [ ! -f "$events_file" ]; then
                   events_file="$(ls -1t results/node-*.events.*.jsonl 2>/dev/null | head -n1)"
@@ -203,11 +221,17 @@ jobs:
                 prev_lines=$(( $(wc -l < "$events_file") + 1 ))
               done
             }
-            PULSE_PPROF=1 RELAMPO_WORKER_LOG_MODE=table RELAMPO_WORKER_SNAPSHOT_SECONDS=0 relampo-worker --yaml "$SCENARIO_FILE" --node ${{ matrix.node }} --total 4 $VUS_FLAG 2>&1 | awk 'BEGIN{esc=sprintf("%c",27)} {raw=$0; line=$0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); if (line ~ /^METHOD[[:space:]]+PATH/ || line ~ /^-+/ || line ~ /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)[[:space:]]+/ || line ~ /Duration:/ || line ~ /Test finished\./ || line ~ /❌/) { print raw; fflush(); }}' > "$OUTPUT_FILE" &
+            LOG_PIPE="$(mktemp -u)"
+            mkfifo "$LOG_PIPE"
+            awk 'BEGIN{esc=sprintf("%c",27)} {raw=$0; line=$0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); if (line ~ /^METHOD[[:space:]]+PATH/ || line ~ /^-+/ || line ~ /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)[[:space:]]+/ || line ~ /Duration:/ || line ~ /Test finished\./ || line ~ /❌/) { print raw; fflush(); }}' < "$LOG_PIPE" > "$OUTPUT_FILE" &
+            FILTER_PID=$!
+            PULSE_PPROF=1 RELAMPO_WORKER_LOG_MODE=table RELAMPO_WORKER_SNAPSHOT_SECONDS=0 relampo-worker --yaml "$SCENARIO_FILE" --node ${{ matrix.node }} --total 4 $VUS_FLAG > "$LOG_PIPE" 2>&1 &
             WORKER_PID=$!
             relampo_jmeter_progress "$WORKER_PID"
             wait "$WORKER_PID"
             WORKER_STATUS=$?
+            wait "$FILTER_PID" || true
+            rm -f "$LOG_PIPE"
             relampo_capture_go_sample
             mkdir -p results
             PEAKS_FILE="results/node-${{ matrix.node }}.peaks.json"
@@ -246,7 +270,10 @@ jobs:
             if [ "$OUT_MEM" -gt "$FINAL_MEM" ]; then
               FINAL_MEM="$OUT_MEM"
             fi
-            FINAL_CPU="$(awk -v a="$EXIST_CPU" -v b="$OUT_CPU" 'BEGIN { if (b > a) printf "%.2f", b; else printf "%.2f", a }')"
+            if [ "$RELAMPO_MEM_PS_PEAK" -gt "$FINAL_MEM" ]; then
+              FINAL_MEM="$RELAMPO_MEM_PS_PEAK"
+            fi
+            FINAL_CPU="$(awk -v a="$EXIST_CPU" -v b="$OUT_CPU" -v c="$RELAMPO_CPU_PS_PEAK" 'BEGIN { m=a; if (b > m) m=b; if (c > m) m=c; printf "%.2f", m }')"
             FINAL_GO="$EXIST_GO"
             if [ "$OUT_GO" -gt "$FINAL_GO" ]; then
               FINAL_GO="$OUT_GO"
