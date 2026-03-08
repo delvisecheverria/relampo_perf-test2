@@ -50,6 +50,7 @@ jobs:
             cd "$SCENARIO_DIR"
             OUTPUT_FILE="$(mktemp)"
             echo $'\033[38;5;214m⠸ Esto no es magia, relampo solo esta trabajando, pronto te mostrare los resultados.\033[0m'
+            RELAMPO_P95_ALERT=0
             relampo_extract_stats() {
               local file="$1"
               local start_line="$2"
@@ -140,8 +141,13 @@ jobs:
               rate="$(awk -v c="$count" -v e="$elapsed" 'BEGIN { printf "%.1f", (e > 0 ? c / e : 0) }')"
               avg="$(awk -v s="$sum" -v c="$count" 'BEGIN { printf "%.1f", (c > 0 ? s / c : 0) }')"
               errpct="$(awk -v e="$errs" -v c="$count" 'BEGIN { printf "%.2f", (c > 0 ? (e * 100.0) / c : 0) }')"
-              printf 'summary %s %7d in %s = %6s/s Avg: %7s Min: %7.1f Max: %7.1f P95: %7.1f Active: %3d/%-3d Err: %5d (%6s%%)\n' \
-                "$prefix" "$count" "$(relampo_fmt_hms "$elapsed")" "$rate" "$avg" "$minv" "$maxv" "$p95" "$active_last" "$active_max" "$errs" "$errpct"
+              local p95_alarm=""
+              if awk -v v="$p95" 'BEGIN { exit !(v > 8000.0) }'; then
+                p95_alarm=" ⚠"
+                RELAMPO_P95_ALERT=1
+              fi
+              printf 'summary %s %7d in %s = %6s/s Avg: %7s Min: %7.1f Max: %7.1f P95: %7.1f%s Active: %3d/%-3d Err: %5d (%6s%%)\n' \
+                "$prefix" "$count" "$(relampo_fmt_hms "$elapsed")" "$rate" "$avg" "$minv" "$maxv" "$p95" "$p95_alarm" "$active_last" "$active_max" "$errs" "$errpct"
             }
             relampo_jmeter_progress() {
               local worker_pid="$1"
@@ -183,6 +189,17 @@ jobs:
             relampo_jmeter_progress "$WORKER_PID"
             wait "$WORKER_PID"
             WORKER_STATUS=$?
+            if [ "$RELAMPO_P95_ALERT" -eq 1 ]; then
+              echo "ⅰ P90 response-time reference"
+              echo "   ⚠ P90 > 8s: alert zone. User attention is at risk, and the experience may feel frustrating."
+              echo "   ⚠ P90 > 15s: severe alert zone. This response time is generally beyond acceptable user expectations."
+              echo ""
+              echo "   Note: this alert does not automatically mean the application is slow."
+              echo "   It is a reference signal based on user-experience and performance heuristics."
+              echo ""
+              echo "   Based on classic user response-time guidance (Jakob Nielsen: attention degrades around 10s)"
+              echo "   and practical performance engineering ranges commonly associated with Scott Barber."
+            fi
             CLEAN_OUTPUT_FILE="$(mktemp)"
             awk 'BEGIN{esc=sprintf("%c",27)} {line=$0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); print line}' "$OUTPUT_FILE" > "$CLEAN_OUTPUT_FILE"
             MEM_PEAK="$(grep -Eo 'MEM Peak:[[:space:]]*[0-9]+' "$CLEAN_OUTPUT_FILE" | tail -n1 | grep -Eo '[0-9]+' || true)"
