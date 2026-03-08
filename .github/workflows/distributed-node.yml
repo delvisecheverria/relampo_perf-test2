@@ -42,8 +42,8 @@ jobs:
           SCENARIO_DIR="$(dirname "$SCENARIO_PATH")"
           SCENARIO_FILE="$(basename "$SCENARIO_PATH")"
           VUS_FLAG=""
-          if [ -n "10" ]; then
-            VUS_FLAG="--vus 10"
+          if [ -n "30" ]; then
+            VUS_FLAG="--vus 30"
           fi
           set -o pipefail
           WORKER_STATUS=0
@@ -192,9 +192,33 @@ jobs:
             WORKER_STATUS=$?
             mkdir -p results
             PEAKS_FILE="results/node-${{ matrix.node }}.peaks.json"
-            if [ ! -f "$PEAKS_FILE" ]; then
-              printf '{"mem_peak_mb":0,"cpu_peak":0,"go_peak":0}\n' > "$PEAKS_FILE"
+            EXIST_MEM="$(grep -Eo '"mem_peak_mb"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
+            EXIST_CPU="$(grep -Eo '"cpu_peak"[[:space:]]*:[[:space:]]*[0-9]+([.][0-9]+)?' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+([.][0-9]+)?' || true)"
+            EXIST_GO="$(grep -Eo '"go_peak"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
+            [ -z "$EXIST_MEM" ] && EXIST_MEM=0
+            [ -z "$EXIST_CPU" ] && EXIST_CPU=0
+            [ -z "$EXIST_GO" ] && EXIST_GO=0
+
+            CLEAN_OUTPUT_FILE="$(mktemp)"
+            awk 'BEGIN{esc=sprintf("%c",27)} {line=$0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); print line}' "$OUTPUT_FILE" > "$CLEAN_OUTPUT_FILE"
+            OUT_MEM="$(grep -Eo 'MEM Peak:[[:space:]]*[0-9]+' "$CLEAN_OUTPUT_FILE" | tail -n1 | grep -Eo '[0-9]+' || true)"
+            OUT_CPU="$(grep -Eo 'CPU Peak:[[:space:]]*[0-9]+([.][0-9]+)?' "$CLEAN_OUTPUT_FILE" | tail -n1 | grep -Eo '[0-9]+([.][0-9]+)?' || true)"
+            OUT_GO="$(grep -Eo 'Go:[[:space:]]*[0-9]+' "$CLEAN_OUTPUT_FILE" | tail -n1 | grep -Eo '[0-9]+' || true)"
+            rm -f "$CLEAN_OUTPUT_FILE"
+            [ -z "$OUT_MEM" ] && OUT_MEM=0
+            [ -z "$OUT_CPU" ] && OUT_CPU=0
+            [ -z "$OUT_GO" ] && OUT_GO=0
+
+            FINAL_MEM="$EXIST_MEM"
+            if [ "$OUT_MEM" -gt "$FINAL_MEM" ]; then
+              FINAL_MEM="$OUT_MEM"
             fi
+            FINAL_CPU="$(awk -v a="$EXIST_CPU" -v b="$OUT_CPU" 'BEGIN { if (b > a) printf "%.2f", b; else printf "%.2f", a }')"
+            FINAL_GO="$EXIST_GO"
+            if [ "$OUT_GO" -gt "$FINAL_GO" ]; then
+              FINAL_GO="$OUT_GO"
+            fi
+            printf '{"mem_peak_mb":%s,"cpu_peak":%s,"go_peak":%s}\n' "$FINAL_MEM" "$FINAL_CPU" "$FINAL_GO" > "$PEAKS_FILE"
             if [ "$RELAMPO_P95_ALERT" -eq 1 ]; then
               echo "ⅰ P90 response-time reference"
               echo "   ⚠ P90 > 8s: alert zone. User attention is at risk, and the experience may feel frustrating."
