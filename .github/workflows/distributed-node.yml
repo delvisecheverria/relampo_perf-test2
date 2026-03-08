@@ -42,8 +42,8 @@ jobs:
           SCENARIO_DIR="$(dirname "$SCENARIO_PATH")"
           SCENARIO_FILE="$(basename "$SCENARIO_PATH")"
           VUS_FLAG=""
-          if [ -n "30" ]; then
-            VUS_FLAG="--vus 30"
+          if [ -n "10" ]; then
+            VUS_FLAG="--vus 10"
           fi
           set -o pipefail
           WORKER_STATUS=0
@@ -150,6 +150,23 @@ jobs:
               printf 'summary %s %7d in %s = %6s/s Avg: %7s Min: %7.1f Max: %7.1f P95: %7.1f%s Active: %3d/%-3d Err: %5d (%6s%%)\n' \
                 "$prefix" "$count" "$(relampo_fmt_hms "$elapsed")" "$rate" "$avg" "$minv" "$maxv" "$p95" "$p95_alarm" "$active_last" "$active_max" "$errs" "$errpct"
             }
+            RELAMPO_GO_START=""
+            RELAMPO_GO_END=""
+            RELAMPO_GO_SAMPLE_PEAK=0
+            relampo_capture_go_sample() {
+              local go_count
+              go_count="$(curl -fsS --max-time 1 "http://127.0.0.1:6060/debug/pprof/goroutine?debug=1" 2>/dev/null | awk 'NR==1 { for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+$/) { print $i; break } }' || true)"
+              if [ -z "$go_count" ]; then
+                return
+              fi
+              if [ -z "$RELAMPO_GO_START" ]; then
+                RELAMPO_GO_START="$go_count"
+              fi
+              RELAMPO_GO_END="$go_count"
+              if [ "$go_count" -gt "$RELAMPO_GO_SAMPLE_PEAK" ]; then
+                RELAMPO_GO_SAMPLE_PEAK="$go_count"
+              fi
+            }
             relampo_jmeter_progress() {
               local worker_pid="$1"
               local start_epoch
@@ -158,6 +175,7 @@ jobs:
               local events_file=""
               local prev_lines=1
               while kill -0 "$worker_pid" 2>/dev/null; do
+                relampo_capture_go_sample
                 sleep 5
                 if [ -z "$events_file" ] || [ ! -f "$events_file" ]; then
                   events_file="$(ls -1t results/node-*.events.*.jsonl 2>/dev/null | head -n1)"
@@ -190,14 +208,29 @@ jobs:
             relampo_jmeter_progress "$WORKER_PID"
             wait "$WORKER_PID"
             WORKER_STATUS=$?
+            relampo_capture_go_sample
             mkdir -p results
             PEAKS_FILE="results/node-${{ matrix.node }}.peaks.json"
             EXIST_MEM="$(grep -Eo '"mem_peak_mb"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
             EXIST_CPU="$(grep -Eo '"cpu_peak"[[:space:]]*:[[:space:]]*[0-9]+([.][0-9]+)?' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+([.][0-9]+)?' || true)"
             EXIST_GO="$(grep -Eo '"go_peak"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
+            EXIST_GO_START="$(grep -Eo '"go_start"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
+            EXIST_GO_END="$(grep -Eo '"go_end"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
+            EXIST_GO_DELTA="$(grep -Eo '"go_delta"[[:space:]]*:[[:space:]]*-?[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo -- '-?[0-9]+' || true)"
             [ -z "$EXIST_MEM" ] && EXIST_MEM=0
             [ -z "$EXIST_CPU" ] && EXIST_CPU=0
             [ -z "$EXIST_GO" ] && EXIST_GO=0
+            [ -z "$EXIST_GO_START" ] && EXIST_GO_START=0
+            [ -z "$EXIST_GO_END" ] && EXIST_GO_END=0
+            if [ "$EXIST_GO_START" -eq 0 ] && [ -n "$RELAMPO_GO_START" ]; then
+              EXIST_GO_START="$RELAMPO_GO_START"
+            fi
+            if [ "$EXIST_GO_END" -eq 0 ] && [ -n "$RELAMPO_GO_END" ]; then
+              EXIST_GO_END="$RELAMPO_GO_END"
+            fi
+            if [ -z "$EXIST_GO_DELTA" ]; then
+              EXIST_GO_DELTA=$((EXIST_GO_END - EXIST_GO_START))
+            fi
 
             CLEAN_OUTPUT_FILE="$(mktemp)"
             awk 'BEGIN{esc=sprintf("%c",27)} {line=$0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); print line}' "$OUTPUT_FILE" > "$CLEAN_OUTPUT_FILE"
@@ -218,7 +251,10 @@ jobs:
             if [ "$OUT_GO" -gt "$FINAL_GO" ]; then
               FINAL_GO="$OUT_GO"
             fi
-            printf '{"mem_peak_mb":%s,"cpu_peak":%s,"go_peak":%s}\n' "$FINAL_MEM" "$FINAL_CPU" "$FINAL_GO" > "$PEAKS_FILE"
+            if [ "$RELAMPO_GO_SAMPLE_PEAK" -gt "$FINAL_GO" ]; then
+              FINAL_GO="$RELAMPO_GO_SAMPLE_PEAK"
+            fi
+            printf '{"mem_peak_mb":%s,"cpu_peak":%s,"go_peak":%s,"go_start":%s,"go_end":%s,"go_delta":%s}\n' "$FINAL_MEM" "$FINAL_CPU" "$FINAL_GO" "$EXIST_GO_START" "$EXIST_GO_END" "$EXIST_GO_DELTA" > "$PEAKS_FILE"
             if [ "$RELAMPO_P95_ALERT" -eq 1 ]; then
               echo "ⅰ P90 response-time reference"
               echo "   ⚠ P90 > 8s: alert zone. User attention is at risk, and the experience may feel frustrating."
