@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [1, 2]
+        node: [1, 2, 3, 4]
 
     steps:
       - name: Checkout repo
@@ -37,13 +37,13 @@ jobs:
 
       - name: Run worker node
         run: |
-          echo "🏁 Starting node ${{ matrix.node }} of 2"
+          echo "🏁 Starting node ${{ matrix.node }} of 4"
           SCENARIO_PATH='scenarios/delvis.yaml'
           SCENARIO_DIR="$(dirname "$SCENARIO_PATH")"
           SCENARIO_FILE="$(basename "$SCENARIO_PATH")"
           VUS_FLAG=""
-          if [ -n "10" ]; then
-            VUS_FLAG="--vus 10"
+          if [ -n "100" ]; then
+            VUS_FLAG="--vus 100"
           fi
           set -o pipefail
           WORKER_STATUS=0
@@ -225,7 +225,7 @@ jobs:
             mkfifo "$LOG_PIPE"
             awk 'BEGIN{esc=sprintf("%c",27)} {raw=$0; line=$0; gsub(esc "\\[[0-9;]*[A-Za-z]", "", line); if (line ~ /^METHOD[[:space:]]+PATH/ || line ~ /^-+/ || line ~ /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)[[:space:]]+/ || line ~ /Duration:/ || line ~ /Test finished\./ || line ~ /❌/) { print raw; fflush(); }}' < "$LOG_PIPE" > "$OUTPUT_FILE" &
             FILTER_PID=$!
-            PULSE_PPROF=1 RELAMPO_WORKER_LOG_MODE=table RELAMPO_WORKER_SNAPSHOT_SECONDS=0 relampo-worker --yaml "$SCENARIO_FILE" --node ${{ matrix.node }} --total 2 $VUS_FLAG > "$LOG_PIPE" 2>&1 &
+            PULSE_PPROF=1 RELAMPO_WORKER_LOG_MODE=table RELAMPO_WORKER_SNAPSHOT_SECONDS=0 relampo-worker --yaml "$SCENARIO_FILE" --node ${{ matrix.node }} --total 4 $VUS_FLAG > "$LOG_PIPE" 2>&1 &
             WORKER_PID=$!
             relampo_jmeter_progress "$WORKER_PID"
             wait "$WORKER_PID"
