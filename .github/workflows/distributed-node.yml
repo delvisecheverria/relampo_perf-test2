@@ -167,7 +167,7 @@ jobs:
                 RELAMPO_CPU_PEAK="$(awk -v a="$RELAMPO_CPU_PEAK" -v b="$cpu_pct" 'BEGIN { if (b > a) printf "%.1f", b; else printf "%.1f", a }')"
               fi
               local go_count
-              go_count="$(curl -fsS --max-time 1 "http://127.0.0.1:6060/debug/pprof/goroutine?debug=1" 2>/dev/null | awk 'NR==1 { for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+$/) { print $i; exit } }')"
+              go_count="$(curl -fsS --max-time 1 "http://127.0.0.1:6060/debug/pprof/goroutine?debug=1" 2>/dev/null | awk 'NR==1 { for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+$/) { print $i; break } }' || true)"
               if [ -n "$go_count" ] && [ "$go_count" -gt "$RELAMPO_GO_PEAK" ]; then
                 RELAMPO_GO_PEAK="$go_count"
               fi
