@@ -1,467 +1,467 @@
 data_source:
-  type: csv
-  mode: sequential
-  path: users.csv
-  variable_names: email,pass
-  name: Data Source
+    mode: sequential
+    name: Data Source
+    path: users.csv
+    type: csv
+    variable_names: email,pass
 http_defaults:
-  base_url: http://www.testingyes.com
-  follow_redirects: true
-  headers:
-    Accept-Encoding: gzip, deflate
-    Accept-Language: en-US,en;q=0.9
-    User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:147.0) Gecko/20100101 Firefox/147.0
+    base_url: http://www.testingyes.com
+    follow_redirects: true
+    headers:
+        Accept-Encoding: gzip, deflate
+        Accept-Language: en-US,en;q=0.9
+        User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:147.0) Gecko/20100101 Firefox/147.0
 scenarios:
-  - name: Recorded Scenario
-    load:
-      type: ramp_up_down
-      duration: 10m
-      iterations: '0'
-      users: '50'
-      ramp_up: 2m
-      ramp_down: 1m
-    cookies:
-      mode: auto
-    steps:
-      - request:
-          method: GET
-          url: /demo/
-          recorded_at: '2026-03-03T13:07:39.647683Z'
-          response_preview:
-            status: 200
-            size_bytes: 4529
-            time_ms: 411
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'GET: /demo/'
-          extractors:
-            - type: regex
-              from: body
-              var: securityToken
-              default: No found
-              pattern: (?is)(?:var|let|const)\s+securityToken\s*=\s*["']([^"']+)["']
-              group: '1'
-              variable: securityToken
-              capture_mode: first
-              match_no: 1
-              template: $1$
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Cookie: zenid=1342882eeb2996772fd6eaf2c6af988b; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Priority: u=0, i
-            Upgrade-Insecure-Requests: '1'
-      - request:
-          method: GET
-          url: /demo/index.php?main_page=login
-          recorded_at: '2026-03-03T13:07:45.917567Z'
-          response_preview:
-            status: 200
-            size_bytes: 13592
-            time_ms: 565
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'GET: /demo/index.php?main_page=login'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Cookie: zenid=1342882eeb2996772fd6eaf2c6af988b; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/
-            Upgrade-Insecure-Requests: '1'
-      - think_time: 30s
-      - request:
-          method: POST
-          url: /demo/index.php?main_page=login&action=process
-          body: securityToken={{securityToken}}&email_address={{email}}&password=test12345&securityToken={{securityToken}}
-          recorded_at: '2026-03-03T13:07:58.972395Z'
-          response_preview:
-            status: 302
-            size_bytes: 0
-            time_ms: 516
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'POST: /demo/index.php?main_page=login&action=process'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Content-Length: '149'
-            Content-Type: application/x-www-form-urlencoded
-            Cookie: zenid=1342882eeb2996772fd6eaf2c6af988b; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Origin: http://www.testingyes.com
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/index.php?main_page=login
-            Upgrade-Insecure-Requests: '1'
-      - request:
-          method: GET
-          url: /demo/index.php?main_page=index
-          recorded_at: '2026-03-03T13:07:59.491432Z'
-          response_preview:
-            status: 200
-            size_bytes: 4672
-            time_ms: 717
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'GET: /demo/index.php?main_page=index'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/index.php?main_page=login
-            Upgrade-Insecure-Requests: '1'
-      - think_time: 15s
-      - request:
-          method: GET
-          url: /demo/index.php?main_page=product_info&cPath=1&products_id=7
-          recorded_at: '2026-03-03T13:08:01.762949Z'
-          response_preview:
-            status: 200
-            size_bytes: 5700
-            time_ms: 864
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'GET: /demo/index.php?main_page=product_info&cPath=1&products_id=7'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/index.php?main_page=index
-            Upgrade-Insecure-Requests: '1'
-      - request:
-          method: GET
-          url: /demo/includes/modules/pages/product_info/jscript_textarea_counter.js
-          recorded_at: '2026-03-03T13:08:02.657329Z'
-          response_preview:
-            status: 304
-            size_bytes: 0
-            time_ms: 82
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'GET: /demo/includes/modules/pages/product_info/jscript_textarea_counter.js'
-          headers:
-            Accept: '*/*'
-            Connection: keep-alive
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            If-Modified-Since: Wed, 17 Jul 2019 00:18:58 GMT
-            Priority: u=2
-            Referer: http://www.testingyes.com/demo/index.php?main_page=product_info&cPath=1&products_id=7
-      - request:
-          method: POST
-          url: /demo/index.php?main_page=product_info&cPath=1&products_id=7&action=add_product
-          body: "------geckoformboundary8e34cef92f1a7f59b4e8c9035957519d\r\nContent-Disposition: form-data; name=\"securityToken\"\r\n\r\n15742ae54f4f319431ce549f61ea027f\r\n------geckoformboundary8e34cef92f1a7f59b4e8c9035957519d\r\nContent-Disposition: form-data; name=\"cart_quantity\"\r\n\r\n1\r\n------geckoformboundary8e34cef92f1a7f59b4e8c9035957519d\r\nContent-Disposition: form-data; name=\"products_id\"\r\n\r\n7\r\n------geckoformboundary8e34cef92f1a7f59b4e8c9035957519d--\r\n"
-          recorded_at: '2026-03-03T13:08:04.152099Z'
-          response_preview:
-            status: 302
-            size_bytes: 0
-            time_ms: 302
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'POST: /demo/index.php?main_page=product_info&cPath=1&products_id=7&action=add_product'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Content-Length: '436'
-            Content-Type: multipart/form-data; boundary=----geckoformboundary8e34cef92f1a7f59b4e8c9035957519d
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Origin: http://www.testingyes.com
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/index.php?main_page=product_info&cPath=1&products_id=7
-            Upgrade-Insecure-Requests: '1'
-      - request:
-          method: GET
-          url: /demo/index.php?main_page=shopping_cart
-          recorded_at: '2026-03-03T13:08:04.457134Z'
-          response_preview:
-            status: 200
-            size_bytes: 5614
-            time_ms: 562
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'GET: /demo/index.php?main_page=shopping_cart'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/index.php?main_page=product_info&cPath=1&products_id=7
-            Upgrade-Insecure-Requests: '1'
-      - request:
-          method: GET
-          url: /demo/includes/general.js
-          recorded_at: '2026-03-03T13:08:05.04693Z'
-          response_preview:
-            status: 304
-            size_bytes: 0
-            time_ms: 80
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'GET: /demo/includes/general.js'
-          headers:
-            Accept: '*/*'
-            Connection: keep-alive
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            If-Modified-Since: Wed, 17 Jul 2019 00:18:58 GMT
-            Priority: u=2
-            Referer: http://www.testingyes.com/demo/index.php?main_page=shopping_cart
-      - think_time: 10s
-      - request:
-          method: GET
-          url: /demo/index.php?main_page=checkout_shipping
-          recorded_at: '2026-03-03T13:08:06.699994Z'
-          response_preview:
-            status: 200
-            size_bytes: 5168
-            time_ms: 1084
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'GET: /demo/index.php?main_page=checkout_shipping'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/index.php?main_page=shopping_cart
-            Upgrade-Insecure-Requests: '1'
-      - think_time: 30s
-      - request:
-          method: POST
-          url: /demo/index.php?main_page=checkout_shipping
-          body: securityToken={{securityToken}}&action=process&shipping=item_item&comments=
-          recorded_at: '2026-03-03T13:08:10.153468Z'
-          response_preview:
-            status: 302
-            size_bytes: 0
-            time_ms: 258
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'POST: /demo/index.php?main_page=checkout_shipping'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Content-Length: '90'
-            Content-Type: application/x-www-form-urlencoded
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Origin: http://www.testingyes.com
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_shipping
-            Upgrade-Insecure-Requests: '1'
-      - request:
-          method: GET
-          url: /demo/index.php?main_page=checkout_payment
-          recorded_at: '2026-03-03T13:08:10.414553Z'
-          response_preview:
-            status: 200
-            size_bytes: 6350
-            time_ms: 543
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'GET: /demo/index.php?main_page=checkout_payment'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_shipping
-            Upgrade-Insecure-Requests: '1'
-      - request:
-          method: POST
-          url: /demo/index.php?main_page=checkout_confirmation
-          body: securityToken={{securityToken}}&action=submit&dc_redeem_code=&payment=moneyorder&comments=
-          recorded_at: '2026-03-03T13:08:13.263234Z'
-          response_preview:
-            status: 200
-            size_bytes: 5678
-            time_ms: 564
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'POST: /demo/index.php?main_page=checkout_confirmation'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Content-Length: '105'
-            Content-Type: application/x-www-form-urlencoded
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Origin: http://www.testingyes.com
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_payment
-            Upgrade-Insecure-Requests: '1'
-      - request:
-          method: POST
-          url: /demo/index.php?main_page=checkout_process
-          body: securityToken={{securityToken}}
-          recorded_at: '2026-03-03T13:08:17.060125Z'
-          response_preview:
-            status: 302
-            size_bytes: 0
-            time_ms: 450
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'POST: /demo/index.php?main_page=checkout_process'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Content-Length: '46'
-            Content-Type: application/x-www-form-urlencoded
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Origin: http://www.testingyes.com
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_confirmation
-            Upgrade-Insecure-Requests: '1'
-      - request:
-          method: GET
-          url: /demo/index.php?main_page=checkout_success
-          recorded_at: '2026-03-03T13:08:17.512744Z'
-          response_preview:
-            status: 200
-            size_bytes: 5423
-            time_ms: 600
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'GET: /demo/index.php?main_page=checkout_success'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_confirmation
-            Upgrade-Insecure-Requests: '1'
-      - request:
-          method: GET
-          url: /demo/index.php?main_page=logoff
-          recorded_at: '2026-03-03T13:08:19.893582Z'
-          response_preview:
-            status: 302
-            size_bytes: 0
-            time_ms: 256
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'GET: /demo/index.php?main_page=logoff'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_success
-            Upgrade-Insecure-Requests: '1'
-      - request:
-          method: GET
-          url: /demo/index.php?main_page=logoff
-          recorded_at: '2026-03-03T13:08:20.152625Z'
-          response_preview:
-            status: 200
-            size_bytes: 4273
-            time_ms: 390
-          cookie_override: inherit
-          cache_override: inherit
-          throughput:
-            enabled: false
-          retrieve_embedded_resources: false
-          redirect_automatically: false
-          follow_redirects: true
-          enabled: true
-          name: 'GET: /demo/index.php?main_page=logoff'
-          headers:
-            Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-            Connection: keep-alive
-            Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
-            Priority: u=0, i
-            Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_success
-            Upgrade-Insecure-Requests: '1'
+    - cookies:
+        mode: auto
+      load:
+        duration: 2m
+        iterations: "0"
+        ramp_down: 1m
+        ramp_up: 2m
+        type: ramp_up_down
+        users: "50"
+      name: Recorded Scenario
+      steps:
+        - request:
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            extractors:
+                - capture_mode: first
+                  default: No found
+                  from: body
+                  group: "1"
+                  match_no: 1
+                  pattern: (?is)(?:var|let|const)\s+securityToken\s*=\s*["']([^"']+)["']
+                  template: $1$
+                  type: regex
+                  var: securityToken
+                  variable: securityToken
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Cookie: zenid=1342882eeb2996772fd6eaf2c6af988b; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Priority: u=0, i
+                Upgrade-Insecure-Requests: "1"
+            method: GET
+            name: 'GET: /demo/'
+            recorded_at: "2026-03-03T13:07:39.647683Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 4529
+                status: 200
+                time_ms: 411
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/
+        - request:
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Cookie: zenid=1342882eeb2996772fd6eaf2c6af988b; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/
+                Upgrade-Insecure-Requests: "1"
+            method: GET
+            name: 'GET: /demo/index.php?main_page=login'
+            recorded_at: "2026-03-03T13:07:45.917567Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 13592
+                status: 200
+                time_ms: 565
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=login
+        - think_time: 30s
+        - request:
+            body: securityToken={{securityToken}}&email_address={{email}}&password=test12345&securityToken={{securityToken}}
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Content-Length: "149"
+                Content-Type: application/x-www-form-urlencoded
+                Cookie: zenid=1342882eeb2996772fd6eaf2c6af988b; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Origin: http://www.testingyes.com
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/index.php?main_page=login
+                Upgrade-Insecure-Requests: "1"
+            method: POST
+            name: 'POST: /demo/index.php?main_page=login&action=process'
+            recorded_at: "2026-03-03T13:07:58.972395Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 0
+                status: 302
+                time_ms: 516
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=login&action=process
+        - request:
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/index.php?main_page=login
+                Upgrade-Insecure-Requests: "1"
+            method: GET
+            name: 'GET: /demo/index.php?main_page=index'
+            recorded_at: "2026-03-03T13:07:59.491432Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 4672
+                status: 200
+                time_ms: 717
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=index
+        - think_time: 15s
+        - request:
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/index.php?main_page=index
+                Upgrade-Insecure-Requests: "1"
+            method: GET
+            name: 'GET: /demo/index.php?main_page=product_info&cPath=1&products_id=7'
+            recorded_at: "2026-03-03T13:08:01.762949Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 5700
+                status: 200
+                time_ms: 864
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=product_info&cPath=1&products_id=7
+        - request:
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: '*/*'
+                Connection: keep-alive
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                If-Modified-Since: Wed, 17 Jul 2019 00:18:58 GMT
+                Priority: u=2
+                Referer: http://www.testingyes.com/demo/index.php?main_page=product_info&cPath=1&products_id=7
+            method: GET
+            name: 'GET: /demo/includes/modules/pages/product_info/jscript_textarea_counter.js'
+            recorded_at: "2026-03-03T13:08:02.657329Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 0
+                status: 304
+                time_ms: 82
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/includes/modules/pages/product_info/jscript_textarea_counter.js
+        - request:
+            body: "------geckoformboundary8e34cef92f1a7f59b4e8c9035957519d\r\nContent-Disposition: form-data; name=\"securityToken\"\r\n\r\n15742ae54f4f319431ce549f61ea027f\r\n------geckoformboundary8e34cef92f1a7f59b4e8c9035957519d\r\nContent-Disposition: form-data; name=\"cart_quantity\"\r\n\r\n1\r\n------geckoformboundary8e34cef92f1a7f59b4e8c9035957519d\r\nContent-Disposition: form-data; name=\"products_id\"\r\n\r\n7\r\n------geckoformboundary8e34cef92f1a7f59b4e8c9035957519d--\r\n"
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Content-Length: "436"
+                Content-Type: multipart/form-data; boundary=----geckoformboundary8e34cef92f1a7f59b4e8c9035957519d
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Origin: http://www.testingyes.com
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/index.php?main_page=product_info&cPath=1&products_id=7
+                Upgrade-Insecure-Requests: "1"
+            method: POST
+            name: 'POST: /demo/index.php?main_page=product_info&cPath=1&products_id=7&action=add_product'
+            recorded_at: "2026-03-03T13:08:04.152099Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 0
+                status: 302
+                time_ms: 302
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=product_info&cPath=1&products_id=7&action=add_product
+        - request:
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/index.php?main_page=product_info&cPath=1&products_id=7
+                Upgrade-Insecure-Requests: "1"
+            method: GET
+            name: 'GET: /demo/index.php?main_page=shopping_cart'
+            recorded_at: "2026-03-03T13:08:04.457134Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 5614
+                status: 200
+                time_ms: 562
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=shopping_cart
+        - request:
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: '*/*'
+                Connection: keep-alive
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                If-Modified-Since: Wed, 17 Jul 2019 00:18:58 GMT
+                Priority: u=2
+                Referer: http://www.testingyes.com/demo/index.php?main_page=shopping_cart
+            method: GET
+            name: 'GET: /demo/includes/general.js'
+            recorded_at: "2026-03-03T13:08:05.04693Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 0
+                status: 304
+                time_ms: 80
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/includes/general.js
+        - think_time: 10s
+        - request:
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/index.php?main_page=shopping_cart
+                Upgrade-Insecure-Requests: "1"
+            method: GET
+            name: 'GET: /demo/index.php?main_page=checkout_shipping'
+            recorded_at: "2026-03-03T13:08:06.699994Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 5168
+                status: 200
+                time_ms: 1084
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=checkout_shipping
+        - think_time: 30s
+        - request:
+            body: securityToken={{securityToken}}&action=process&shipping=item_item&comments=
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Content-Length: "90"
+                Content-Type: application/x-www-form-urlencoded
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Origin: http://www.testingyes.com
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_shipping
+                Upgrade-Insecure-Requests: "1"
+            method: POST
+            name: 'POST: /demo/index.php?main_page=checkout_shipping'
+            recorded_at: "2026-03-03T13:08:10.153468Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 0
+                status: 302
+                time_ms: 258
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=checkout_shipping
+        - request:
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_shipping
+                Upgrade-Insecure-Requests: "1"
+            method: GET
+            name: 'GET: /demo/index.php?main_page=checkout_payment'
+            recorded_at: "2026-03-03T13:08:10.414553Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 6350
+                status: 200
+                time_ms: 543
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=checkout_payment
+        - request:
+            body: securityToken={{securityToken}}&action=submit&dc_redeem_code=&payment=moneyorder&comments=
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Content-Length: "105"
+                Content-Type: application/x-www-form-urlencoded
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Origin: http://www.testingyes.com
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_payment
+                Upgrade-Insecure-Requests: "1"
+            method: POST
+            name: 'POST: /demo/index.php?main_page=checkout_confirmation'
+            recorded_at: "2026-03-03T13:08:13.263234Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 5678
+                status: 200
+                time_ms: 564
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=checkout_confirmation
+        - request:
+            body: securityToken={{securityToken}}
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Content-Length: "46"
+                Content-Type: application/x-www-form-urlencoded
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Origin: http://www.testingyes.com
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_confirmation
+                Upgrade-Insecure-Requests: "1"
+            method: POST
+            name: 'POST: /demo/index.php?main_page=checkout_process'
+            recorded_at: "2026-03-03T13:08:17.060125Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 0
+                status: 302
+                time_ms: 450
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=checkout_process
+        - request:
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_confirmation
+                Upgrade-Insecure-Requests: "1"
+            method: GET
+            name: 'GET: /demo/index.php?main_page=checkout_success'
+            recorded_at: "2026-03-03T13:08:17.512744Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 5423
+                status: 200
+                time_ms: 600
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=checkout_success
+        - request:
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_success
+                Upgrade-Insecure-Requests: "1"
+            method: GET
+            name: 'GET: /demo/index.php?main_page=logoff'
+            recorded_at: "2026-03-03T13:08:19.893582Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 0
+                status: 302
+                time_ms: 256
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=logoff
+        - request:
+            cache_override: inherit
+            cookie_override: inherit
+            enabled: true
+            follow_redirects: true
+            headers:
+                Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+                Connection: keep-alive
+                Cookie: zenid=bc09322c06d9e795047f4b912479f456; ceid=c54eb0aa42209de5dba865bbf2be88c0
+                Priority: u=0, i
+                Referer: http://www.testingyes.com/demo/index.php?main_page=checkout_success
+                Upgrade-Insecure-Requests: "1"
+            method: GET
+            name: 'GET: /demo/index.php?main_page=logoff'
+            recorded_at: "2026-03-03T13:08:20.152625Z"
+            redirect_automatically: false
+            response_preview:
+                size_bytes: 4273
+                status: 200
+                time_ms: 390
+            retrieve_embedded_resources: false
+            throughput:
+                enabled: false
+            url: /demo/index.php?main_page=logoff
