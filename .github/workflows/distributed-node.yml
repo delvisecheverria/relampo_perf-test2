@@ -46,8 +46,8 @@ jobs:
             VUS_FLAG="--vus 10"
           fi
           DURATION_FLAG=""
-          if [ -n "__RELAMPO_DURATION__" ]; then
-            DURATION_FLAG="--duration __RELAMPO_DURATION__"
+          if [ -n "2m" ]; then
+            DURATION_FLAG="--duration 2m"
           fi
           set -o pipefail
           (
