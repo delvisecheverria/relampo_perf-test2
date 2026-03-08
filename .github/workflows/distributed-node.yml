@@ -46,6 +46,7 @@ jobs:
             VUS_FLAG="--vus 10"
           fi
           set -o pipefail
+          WORKER_STATUS=0
           (
             cd "$SCENARIO_DIR"
             OUTPUT_FILE="$(mktemp)"
@@ -256,11 +257,15 @@ jobs:
             cat "$OUTPUT_FILE"
             rm -f "$OUTPUT_FILE"
             exit "$WORKER_STATUS"
-          )
+          ) || WORKER_STATUS=$?
+          mkdir -p results
+          printf 'worker_status=%s\n' "$WORKER_STATUS" > "results/node-${{ matrix.node }}.status.txt"
           if [ -d "$SCENARIO_DIR/results" ]; then
-            mkdir -p results
             cp -R "$SCENARIO_DIR/results"/. results/
+          else
+            echo "results directory not found in scenario path: $SCENARIO_DIR/results" >> "results/node-${{ matrix.node }}.status.txt"
           fi
+          exit "$WORKER_STATUS"
 
       - name: Upload logs/artifacts
         if: always()
