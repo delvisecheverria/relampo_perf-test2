@@ -42,8 +42,8 @@ jobs:
           SCENARIO_DIR="$(dirname "$SCENARIO_PATH")"
           SCENARIO_FILE="$(basename "$SCENARIO_PATH")"
           VUS_FLAG=""
-          if [ -n "10" ]; then
-            VUS_FLAG="--vus 10"
+          if [ -n "100" ]; then
+            VUS_FLAG="--vus 100"
           fi
           set -o pipefail
           WORKER_STATUS=0
