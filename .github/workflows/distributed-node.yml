@@ -153,13 +153,27 @@ jobs:
             RELAMPO_GO_START=""
             RELAMPO_GO_END=""
             RELAMPO_GO_SAMPLE_PEAK=0
+            RELAMPO_GO_IOWAIT_START=""
+            RELAMPO_GO_IOWAIT_END=""
+            RELAMPO_GO_IOWAIT_SAMPLE_PEAK=0
             RELAMPO_MEM_PS_PEAK=0
             RELAMPO_CPU_PS_PEAK=0
             relampo_capture_go_sample() {
-              local go_count
-              go_count="$(curl -fsS --max-time 1 "http://127.0.0.1:6060/debug/pprof/goroutine?debug=1" 2>/dev/null | awk 'NR==1 { for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+$/) { print $i; break } }' || true)"
+              local go_dump go_count go_iowait
+              go_dump="$(curl -fsS --max-time 1 "http://127.0.0.1:6060/debug/pprof/goroutine?debug=2" 2>/dev/null || true)"
+              if [ -z "$go_dump" ]; then
+                return
+              fi
+              go_count="$(printf '%s\n' "$go_dump" | awk 'NR==1 { for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+$/) { print $i; break } }')"
+              if [ -z "$go_count" ]; then
+                go_count="$(printf '%s\n' "$go_dump" | awk '/^goroutine [0-9]+ \\[/ { c++ } END { if (c > 0) print c }')"
+              fi
               if [ -z "$go_count" ]; then
                 return
+              fi
+              go_iowait="$(printf '%s\n' "$go_dump" | awk '/^goroutine [0-9]+ \\[[Ii][Oo] wait\\]/ { c++ } END { print c+0 }')"
+              if [ -z "$go_iowait" ]; then
+                go_iowait=0
               fi
               if [ -z "$RELAMPO_GO_START" ]; then
                 RELAMPO_GO_START="$go_count"
@@ -167,6 +181,13 @@ jobs:
               RELAMPO_GO_END="$go_count"
               if [ "$go_count" -gt "$RELAMPO_GO_SAMPLE_PEAK" ]; then
                 RELAMPO_GO_SAMPLE_PEAK="$go_count"
+              fi
+              if [ -z "$RELAMPO_GO_IOWAIT_START" ]; then
+                RELAMPO_GO_IOWAIT_START="$go_iowait"
+              fi
+              RELAMPO_GO_IOWAIT_END="$go_iowait"
+              if [ "$go_iowait" -gt "$RELAMPO_GO_IOWAIT_SAMPLE_PEAK" ]; then
+                RELAMPO_GO_IOWAIT_SAMPLE_PEAK="$go_iowait"
               fi
             }
             relampo_capture_process_sample() {
@@ -241,11 +262,18 @@ jobs:
             EXIST_GO_START="$(grep -Eo '"go_start"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
             EXIST_GO_END="$(grep -Eo '"go_end"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
             EXIST_GO_DELTA="$(grep -Eo '"go_delta"[[:space:]]*:[[:space:]]*-?[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo -- '-?[0-9]+' || true)"
+            EXIST_GO_IOWAIT_START="$(grep -Eo '"go_iowait_start"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
+            EXIST_GO_IOWAIT_PEAK="$(grep -Eo '"go_iowait_peak"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
+            EXIST_GO_IOWAIT_END="$(grep -Eo '"go_iowait_end"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
+            EXIST_GO_IOWAIT_DELTA="$(grep -Eo '"go_iowait_delta"[[:space:]]*:[[:space:]]*-?[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo -- '-?[0-9]+' || true)"
             [ -z "$EXIST_MEM" ] && EXIST_MEM=0
             [ -z "$EXIST_CPU" ] && EXIST_CPU=0
             [ -z "$EXIST_GO" ] && EXIST_GO=0
             [ -z "$EXIST_GO_START" ] && EXIST_GO_START=0
             [ -z "$EXIST_GO_END" ] && EXIST_GO_END=0
+            [ -z "$EXIST_GO_IOWAIT_START" ] && EXIST_GO_IOWAIT_START=0
+            [ -z "$EXIST_GO_IOWAIT_PEAK" ] && EXIST_GO_IOWAIT_PEAK=0
+            [ -z "$EXIST_GO_IOWAIT_END" ] && EXIST_GO_IOWAIT_END=0
             if [ "$EXIST_GO_START" -eq 0 ] && [ -n "$RELAMPO_GO_START" ]; then
               EXIST_GO_START="$RELAMPO_GO_START"
             fi
@@ -254,6 +282,15 @@ jobs:
             fi
             if [ -z "$EXIST_GO_DELTA" ]; then
               EXIST_GO_DELTA=$((EXIST_GO_END - EXIST_GO_START))
+            fi
+            if [ "$EXIST_GO_IOWAIT_START" -eq 0 ] && [ -n "$RELAMPO_GO_IOWAIT_START" ]; then
+              EXIST_GO_IOWAIT_START="$RELAMPO_GO_IOWAIT_START"
+            fi
+            if [ "$EXIST_GO_IOWAIT_END" -eq 0 ] && [ -n "$RELAMPO_GO_IOWAIT_END" ]; then
+              EXIST_GO_IOWAIT_END="$RELAMPO_GO_IOWAIT_END"
+            fi
+            if [ -z "$EXIST_GO_IOWAIT_DELTA" ]; then
+              EXIST_GO_IOWAIT_DELTA=$((EXIST_GO_IOWAIT_END - EXIST_GO_IOWAIT_START))
             fi
 
             CLEAN_OUTPUT_FILE="$(mktemp)"
@@ -281,7 +318,11 @@ jobs:
             if [ "$RELAMPO_GO_SAMPLE_PEAK" -gt "$FINAL_GO" ]; then
               FINAL_GO="$RELAMPO_GO_SAMPLE_PEAK"
             fi
-            printf '{"mem_peak_mb":%s,"cpu_peak":%s,"go_peak":%s,"go_start":%s,"go_end":%s,"go_delta":%s}\n' "$FINAL_MEM" "$FINAL_CPU" "$FINAL_GO" "$EXIST_GO_START" "$EXIST_GO_END" "$EXIST_GO_DELTA" > "$PEAKS_FILE"
+            FINAL_GO_IOWAIT="$EXIST_GO_IOWAIT_PEAK"
+            if [ "$RELAMPO_GO_IOWAIT_SAMPLE_PEAK" -gt "$FINAL_GO_IOWAIT" ]; then
+              FINAL_GO_IOWAIT="$RELAMPO_GO_IOWAIT_SAMPLE_PEAK"
+            fi
+            printf '{"mem_peak_mb":%s,"cpu_peak":%s,"go_peak":%s,"go_start":%s,"go_end":%s,"go_delta":%s,"go_iowait_peak":%s,"go_iowait_start":%s,"go_iowait_end":%s,"go_iowait_delta":%s}\n' "$FINAL_MEM" "$FINAL_CPU" "$FINAL_GO" "$EXIST_GO_START" "$EXIST_GO_END" "$EXIST_GO_DELTA" "$FINAL_GO_IOWAIT" "$EXIST_GO_IOWAIT_START" "$EXIST_GO_IOWAIT_END" "$EXIST_GO_IOWAIT_DELTA" > "$PEAKS_FILE"
             if [ "$RELAMPO_P95_ALERT" -eq 1 ]; then
               echo "ⅰ P90 response-time reference"
               echo "   ⚠ P90 > 8s: alert zone. User attention is at risk, and the experience may feel frustrating."
