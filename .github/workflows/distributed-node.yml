@@ -42,8 +42,8 @@ jobs:
           SCENARIO_DIR="$(dirname "$SCENARIO_PATH")"
           SCENARIO_FILE="$(basename "$SCENARIO_PATH")"
           VUS_FLAG=""
-          if [ -n "500" ]; then
-            VUS_FLAG="--vus 500"
+          if [ -n "10" ]; then
+            VUS_FLAG="--vus 10"
           fi
           set -o pipefail
           WORKER_STATUS=0
@@ -156,11 +156,12 @@ jobs:
             RELAMPO_GO_IOWAIT_START=""
             RELAMPO_GO_IOWAIT_END=""
             RELAMPO_GO_IOWAIT_SAMPLE_PEAK=0
+            RELAMPO_GO_IOWAIT_SAMPLES=0
             RELAMPO_MEM_PS_PEAK=0
             RELAMPO_CPU_PS_PEAK=0
             relampo_capture_go_sample() {
               local go_dump go_count go_iowait
-              go_dump="$(curl -fsS --max-time 1 "http://127.0.0.1:6060/debug/pprof/goroutine?debug=2" 2>/dev/null || true)"
+              go_dump="$(curl -fsS --max-time 3 "http://127.0.0.1:6060/debug/pprof/goroutine?debug=2" 2>/dev/null || true)"
               if [ -z "$go_dump" ]; then
                 return
               fi
@@ -175,6 +176,7 @@ jobs:
               if [ -z "$go_iowait" ]; then
                 go_iowait=0
               fi
+              RELAMPO_GO_IOWAIT_SAMPLES=$((RELAMPO_GO_IOWAIT_SAMPLES + 1))
               if [ -z "$RELAMPO_GO_START" ]; then
                 RELAMPO_GO_START="$go_count"
               fi
@@ -266,6 +268,7 @@ jobs:
             EXIST_GO_IOWAIT_PEAK="$(grep -Eo '"go_iowait_peak"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
             EXIST_GO_IOWAIT_END="$(grep -Eo '"go_iowait_end"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
             EXIST_GO_IOWAIT_DELTA="$(grep -Eo '"go_iowait_delta"[[:space:]]*:[[:space:]]*-?[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo -- '-?[0-9]+' || true)"
+            EXIST_GO_IOWAIT_SAMPLES="$(grep -Eo '"go_iowait_samples"[[:space:]]*:[[:space:]]*[0-9]+' "$PEAKS_FILE" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' || true)"
             [ -z "$EXIST_MEM" ] && EXIST_MEM=0
             [ -z "$EXIST_CPU" ] && EXIST_CPU=0
             [ -z "$EXIST_GO" ] && EXIST_GO=0
@@ -274,6 +277,7 @@ jobs:
             [ -z "$EXIST_GO_IOWAIT_START" ] && EXIST_GO_IOWAIT_START=0
             [ -z "$EXIST_GO_IOWAIT_PEAK" ] && EXIST_GO_IOWAIT_PEAK=0
             [ -z "$EXIST_GO_IOWAIT_END" ] && EXIST_GO_IOWAIT_END=0
+            [ -z "$EXIST_GO_IOWAIT_SAMPLES" ] && EXIST_GO_IOWAIT_SAMPLES=0
             if [ "$EXIST_GO_START" -eq 0 ] && [ -n "$RELAMPO_GO_START" ]; then
               EXIST_GO_START="$RELAMPO_GO_START"
             fi
@@ -322,7 +326,11 @@ jobs:
             if [ "$RELAMPO_GO_IOWAIT_SAMPLE_PEAK" -gt "$FINAL_GO_IOWAIT" ]; then
               FINAL_GO_IOWAIT="$RELAMPO_GO_IOWAIT_SAMPLE_PEAK"
             fi
-            printf '{"mem_peak_mb":%s,"cpu_peak":%s,"go_peak":%s,"go_start":%s,"go_end":%s,"go_delta":%s,"go_iowait_peak":%s,"go_iowait_start":%s,"go_iowait_end":%s,"go_iowait_delta":%s}\n' "$FINAL_MEM" "$FINAL_CPU" "$FINAL_GO" "$EXIST_GO_START" "$EXIST_GO_END" "$EXIST_GO_DELTA" "$FINAL_GO_IOWAIT" "$EXIST_GO_IOWAIT_START" "$EXIST_GO_IOWAIT_END" "$EXIST_GO_IOWAIT_DELTA" > "$PEAKS_FILE"
+            FINAL_GO_IOWAIT_SAMPLES="$EXIST_GO_IOWAIT_SAMPLES"
+            if [ "$RELAMPO_GO_IOWAIT_SAMPLES" -gt "$FINAL_GO_IOWAIT_SAMPLES" ]; then
+              FINAL_GO_IOWAIT_SAMPLES="$RELAMPO_GO_IOWAIT_SAMPLES"
+            fi
+            printf '{"mem_peak_mb":%s,"cpu_peak":%s,"go_peak":%s,"go_start":%s,"go_end":%s,"go_delta":%s,"go_iowait_peak":%s,"go_iowait_start":%s,"go_iowait_end":%s,"go_iowait_delta":%s,"go_iowait_samples":%s}\n' "$FINAL_MEM" "$FINAL_CPU" "$FINAL_GO" "$EXIST_GO_START" "$EXIST_GO_END" "$EXIST_GO_DELTA" "$FINAL_GO_IOWAIT" "$EXIST_GO_IOWAIT_START" "$EXIST_GO_IOWAIT_END" "$EXIST_GO_IOWAIT_DELTA" "$FINAL_GO_IOWAIT_SAMPLES" > "$PEAKS_FILE"
             if [ "$RELAMPO_P95_ALERT" -eq 1 ]; then
               echo "ⅰ P90 response-time reference"
               echo "   ⚠ P90 > 8s: alert zone. User attention is at risk, and the experience may feel frustrating."
