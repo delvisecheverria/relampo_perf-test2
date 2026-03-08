@@ -171,7 +171,7 @@ jobs:
               if [ -z "$go_count" ]; then
                 return
               fi
-              go_iowait="$(printf '%s\n' "$go_dump" | awk '/^goroutine [0-9]+ \\[[Ii][Oo] wait\\]/ { c++ } END { print c+0 }')"
+              go_iowait="$(printf '%s\n' "$go_dump" | awk '/^goroutine [0-9]+ \\[[^]]*[Ii][Oo] wait[^]]*\\]/ { c++ } END { print c+0 }')"
               if [ -z "$go_iowait" ]; then
                 go_iowait=0
               fi
