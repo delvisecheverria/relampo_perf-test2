@@ -15,7 +15,7 @@ scenarios:
     - cookies:
         mode: auto
       load:
-        duration: 5m
+        duration: 2m
         iterations: "0"
         ramp_down: 1m
         ramp_up: 2m
